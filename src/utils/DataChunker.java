@@ -5,49 +5,55 @@
  */
 package utils;
 
-
- 
 import java.io.IOException;
-import java.io.InputStream; 
+import java.io.InputStream;
+
+
 
 /**
- * Loops through an array or InputStream and produces chunks of it in sequential fashion. 
- * In the process, it fires chunkFound events when it detects chunks of data of the specified size. 
- * This will allow the user to do some pre-processing on the chunk before using it.
- * A grand application may be with a websocket server or client which cannot accept more than a fixed number
- * of bytes per payload. You may use objects of this class to break the data up into simple chunks and transmit
- * over the connection and then rebuild on the other end. Since chunks are generated sequentially, there is no
- * fear of data corruption. Just re-couple the chunks as they come in.
- * When it gets to the end of the array, it fires the remaining chunk(which may not be up to the specified {@link DataChunker#chunkSize}) at the end.
+ * Loops through an array or InputStream and produces chunks of it in sequential
+ * fashion. In the process, it fires chunkFound events when it detects chunks of
+ * data of the specified size. This will allow the user to do some
+ * pre-processing on the chunk before using it. A grand application may be with
+ * a websocket server or client which cannot accept more than a fixed number of
+ * bytes per payload. You may use objects of this class to break the data up
+ * into simple chunks and transmit over the connection and then rebuild on the
+ * other end. Since chunks are generated sequentially, there is no fear of data
+ * corruption. Just re-couple the chunks as they come in. When it gets to the
+ * end of the array, it fires the remaining chunk(which may not be up to the
+ * specified {@link DataChunker#chunkSize}) at the end.
  *
- * Each chunk is guaranteed to be of the specified {@link DataChunker#chunkSize} except for the final chunk, as expected.
- * {@link DataChunker#chunkSize}
+ * Each chunk is guaranteed to be of the specified {@link DataChunker#chunkSize}
+ * except for the final chunk, as expected. {@link DataChunker#chunkSize}
  *
  * @author JIBOYE, Oluwagbemiro Olaoluwa <gbenroscience@yahoo.com>
  */
 public abstract class DataChunker {
- 
-/**
- * The size with which you want to
- * process the stream or byte array.
- */
+
+    /**
+     * The size with which you want to process the stream or byte array.
+     */
     private int chunkSize;
 
-   
-     /**
+    private boolean valid;
+
+    /**
      *
      * @param chunkSize The sizeRatio of each chunk. Each chunk generated is
      * guaranteed to have this sizeRatio, save for the final chunk, which will
      * have a sizeRatio equal to the remaining number of elements in the main
      * array.
+     *
+     * You may check the {@link DataChunker#isValid() } method to be sure that
+     * no error occurred during chunking.
      * @param blob The stream whose data is to be broken into chunks
      */
     public DataChunker(int chunkSize, InputStream blob) {
         this.chunkSize = chunkSize;
         chunk(blob);
     }
-    
-       /**
+
+    /**
      *
      * @param chunkSize The sizeRatio of each chunk. Each chunk generated is
      * guaranteed to have this sizeRatio, save for the final chunk, which will
@@ -59,11 +65,13 @@ public abstract class DataChunker {
         this.chunkSize = chunkSize;
         chunk(blob);
     }
-    
-    
-    
+
+    public boolean isValid() {
+        return valid;
+    }
 
     private void chunk(InputStream blob) {
+        this.valid = false;
 
         try {
 
@@ -116,7 +124,7 @@ public abstract class DataChunker {
                     DataChunker chunkParent = this;
 
                     final int allBytesRead = totalBytesRead;
-                    DataChunker chunker = new DataChunker(chunkSize , bigChunk) {
+                    DataChunker chunker = new DataChunker(chunkSize, bigChunk) {
                         @Override
                         public void chunkFound(byte[] foundChunk, int bytesProcessed) {
                             chunkParent.chunkFound(foundChunk, allBytesRead);
@@ -127,20 +135,21 @@ public abstract class DataChunker {
 
                         }
                     };
-                   
+
                     bigChunk = null;
                 }
 
             }
 
             if (readBuffer > 0) {
-                byte[]finalChunk = new byte[cursor];
-                 System.arraycopy(chunk, 0, finalChunk, 0, cursor);
+                byte[] finalChunk = new byte[cursor];
+                System.arraycopy(chunk, 0, finalChunk, 0, cursor);
                 chunkFound(finalChunk, totalBytesRead);
-            } 
-                chunksExhausted(totalBytesRead);
-
+            }
+            chunksExhausted(totalBytesRead);
+            this.valid = true;
         } catch (IOException ex) {
+            this.valid = false;
         } finally {
             if (blob != null) {
                 try {
@@ -153,7 +162,7 @@ public abstract class DataChunker {
     }
 
     private void chunk(byte[] blob) {
-
+        this.valid = false;
         try {
             // 0-8191,8192-2(8192)-1,2(8192)-3(8192)-1
 
@@ -180,7 +189,7 @@ public abstract class DataChunker {
             }
 
             chunksExhausted(sentBytes);
-
+            this.valid = true;
         } catch (Exception ex) {
             ex.printStackTrace();
         }
