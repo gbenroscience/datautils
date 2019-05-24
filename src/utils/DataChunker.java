@@ -4,6 +4,11 @@
  * and open the template in the editor.
  */
 package utils;
+ /*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */ 
  
 import java.io.IOException;
 import java.io.InputStream; 
@@ -38,17 +43,39 @@ public abstract class DataChunker {
     public DataChunker(int chunkSize) {
         this.chunkSize = chunkSize;
     }
-/**
- * 
- * @param blob An InputStream whose backing data needs be made available as
- * discrete chunks of constant size.
- */
-    public void chunk(InputStream blob) {
+    
+     /**
+     *
+     * @param chunkSize The sizeRatio of each chunk. Each chunk generated is
+     * guaranteed to have this sizeRatio, save for the final chunk, which will
+     * have a sizeRatio equal to the remaining number of elements in the main
+     * array.
+     * @param blob The stream whose data is to be broken into chunks
+     */
+    public DataChunker(int chunkSize, InputStream blob) {
+        this.chunkSize = chunkSize;
+        chunk(blob);
+    }
+    
+       /**
+     *
+     * @param chunkSize The sizeRatio of each chunk. Each chunk generated is
+     * guaranteed to have this sizeRatio, save for the final chunk, which will
+     * have a sizeRatio equal to the remaining number of elements in the main
+     * array.
+     * @param blob The array whose data is to be broken into chunks
+     */
+    public DataChunker(int chunkSize, byte[] blob) {
+        this.chunkSize = chunkSize;
+        chunk(blob);
+    }
+
+    private void chunk(InputStream blob) {
 
         try {
 
             //bytes read at that instant from the InputStream
-            int readBytes = 0;
+            int readBytes;
             //sum of all bytes read from the InputStream 
             int totalBytesRead = 0;
             // int processedBytes = 0;//bytes fed to the chunkFound method.
@@ -96,7 +123,7 @@ public abstract class DataChunker {
                     DataChunker chunkParent = this;
 
                     final int allBytesRead = totalBytesRead;
-                    DataChunker chunker = new DataChunker(chunkSize) {
+                    DataChunker chunker = new DataChunker(chunkSize , bigChunk) {
                         @Override
                         public void chunkFound(byte[] foundChunk, int bytesProcessed) {
                             chunkParent.chunkFound(foundChunk, allBytesRead);
@@ -107,7 +134,7 @@ public abstract class DataChunker {
 
                         }
                     };
-                    chunker.chunk(bigChunk);
+                   
                     bigChunk = null;
                 }
 
@@ -131,11 +158,8 @@ public abstract class DataChunker {
         }
 
     }
-/**
- * 
- * @param blob A byte array of data to chunkify.
- */
-    public void chunk(byte[] blob) {
+
+    private void chunk(byte[] blob) {
 
         try {
             // 0-8191,8192-2(8192)-1,2(8192)-3(8192)-1
@@ -187,3 +211,4 @@ public abstract class DataChunker {
     public abstract void chunksExhausted(int bytesProcessed);
 
 }
+
