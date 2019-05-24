@@ -5,6 +5,9 @@
  */
 package utils;
 
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -64,6 +67,28 @@ public abstract class DataChunker {
     public DataChunker(int chunkSize, byte[] blob) {
         this.chunkSize = chunkSize;
         chunk(blob);
+    }
+    
+      /**
+     *
+     * @param chunkSize The sizeRatio of each chunk. Each chunk generated is
+     * guaranteed to have this sizeRatio, save for the final chunk, which will
+     * have a sizeRatio equal to the remaining number of elements in the main
+     * array.
+     *
+     * You may check the {@link DataChunker#isValid() } method to be sure that
+     * no error occurred during chunking.
+     * @param blob The File whose data is to be broken into chunks.
+     */
+    public DataChunker(int chunkSize, File blob) {
+        this.chunkSize = chunkSize;
+
+        try (BufferedInputStream stream = new BufferedInputStream(new FileInputStream(blob))) {
+            chunk(stream);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
     }
 
     public boolean isValid() {
