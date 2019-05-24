@@ -16,14 +16,14 @@ import java.io.InputStream;
  * of bytes per payload. You may use objects of this class to break the data up into simple chunks and transmit
  * over the connection and then rebuild on the other end. Since chunks are generated sequentially, there is no
  * fear of data corruption. Just re-couple the chunks as they come in.
- * When it gets to the end of the array, it fires the remaining chunk(which may not be up to the specified {@link ArrayChunker#chunkSize}) at the end.
+ * When it gets to the end of the array, it fires the remaining chunk(which may not be up to the specified {@link DataChunker#chunkSize}) at the end.
  *
- * Each chunk is guaranteed to be of the specified {@link ArrayChunker#chunkSize} except for the final chunk, as expected.
- * {@link ArrayChunker#SEND_BUFFER_SIZE}
+ * Each chunk is guaranteed to be of the specified {@link DataChunker#chunkSize} except for the final chunk, as expected.
+ * {@link DataChunker#SEND_BUFFER_SIZE}
  *
  * @author JIBOYE, Oluwagbemiro Olaoluwa <gbenroscience@yahoo.com>
  */
-public abstract class ArrayChunker {
+public abstract class DataChunker {
  
 
     private int chunkSize;
@@ -35,7 +35,7 @@ public abstract class ArrayChunker {
      * have a sizeRatio equal to the remaining number of elements in the main
      * array.
      */
-    public ArrayChunker(int chunkSize) {
+    public DataChunker(int chunkSize) {
         this.chunkSize = chunkSize;
     }
 /**
@@ -93,10 +93,10 @@ public abstract class ArrayChunker {
 
                     readBuffer = remainder;//Account for unread items.
                     cursor = remainder;
-                    ArrayChunker chunkParent = this;
+                    DataChunker chunkParent = this;
 
                     final int allBytesRead = totalBytesRead;
-                    ArrayChunker chunker = new ArrayChunker(chunkSize) {
+                    DataChunker chunker = new DataChunker(chunkSize) {
                         @Override
                         public void chunkFound(byte[] foundChunk, int bytesProcessed) {
                             chunkParent.chunkFound(foundChunk, allBytesRead);
