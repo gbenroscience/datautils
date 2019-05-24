@@ -19,7 +19,7 @@ import java.io.InputStream;
  * When it gets to the end of the array, it fires the remaining chunk(which may not be up to the specified {@link DataChunker#chunkSize}) at the end.
  *
  * Each chunk is guaranteed to be of the specified {@link DataChunker#chunkSize} except for the final chunk, as expected.
- * {@link DataChunker#SEND_BUFFER_SIZE}
+ * {@link DataChunker#chunkSize}
  *
  * @author JIBOYE, Oluwagbemiro Olaoluwa <gbenroscience@yahoo.com>
  */
