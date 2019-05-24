@@ -4,11 +4,8 @@
  * and open the template in the editor.
  */
 package utils;
- /*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */ 
+
+
  
 import java.io.IOException;
 import java.io.InputStream; 
@@ -30,20 +27,13 @@ import java.io.InputStream;
  */
 public abstract class DataChunker {
  
-
+/**
+ * The size with which you want to
+ * process the stream or byte array.
+ */
     private int chunkSize;
 
-    /**
-     *
-     * @param chunkSize The sizeRatio of each chunk. Each chunk generated is
-     * guaranteed to have this sizeRatio, save for the final chunk, which will
-     * have a sizeRatio equal to the remaining number of elements in the main
-     * array.
-     */
-    public DataChunker(int chunkSize) {
-        this.chunkSize = chunkSize;
-    }
-    
+   
      /**
      *
      * @param chunkSize The sizeRatio of each chunk. Each chunk generated is
@@ -69,6 +59,9 @@ public abstract class DataChunker {
         this.chunkSize = chunkSize;
         chunk(blob);
     }
+    
+    
+    
 
     private void chunk(InputStream blob) {
 
@@ -211,4 +204,3 @@ public abstract class DataChunker {
     public abstract void chunksExhausted(int bytesProcessed);
 
 }
-
