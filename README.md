@@ -32,3 +32,26 @@ public void chunksExhausted(int bytesProcessed) {
 };
 ```
 
+The first value passed to the ```DataChunker``` constructor is the chunk-size in bytes. In this case, the chunk-size is 8192 bytes(8 kilobytes). This means that the chunker object is going to process any source data in 8192 byte chunks. 
+
+The second argument; i.e ```blob``` , is a File, an InputStream, or a java byte array. The blob is the source data to be processed in chunks.
+
+If you need to do anything with the generated chunks, The ```chunkFound``` method is there to detect each chunk. You can then specify what to do with the chunks within the body of the method.
+
+For instance in one of my tomcat web applications, I set the maximum length of incoming binary messages that a websocket Session can buffer to about 8kilobytes.
+
+Then I used ```DataChunker``` to serve up any file, image or text in 8192 byte chunks to the sessions.
+
+
+This automatically took away packet size errors that tend to occur when large messages are sent via websocket sessions in tomcat.
+
+
+
+
+
+
+
+
+
+
+
