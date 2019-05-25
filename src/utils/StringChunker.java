@@ -22,8 +22,11 @@ public abstract class StringChunker {
         this.valid = valid;
         chunk(blob);
     } 
-    
-    
+
+    public boolean isValid() {
+        return valid;
+    }
+     
   /**
    * 
    * @param blob The text to be processed in chunks of text.
