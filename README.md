@@ -46,6 +46,35 @@ Then I used ```DataChunker``` to serve up any file, image or text in 8192 byte c
 This automatically took away packet size errors that tend to occur when large messages are sent via websocket sessions in tomcat.
 
 
+Text blobs can also be served up in chunks in 2 ways depending on the programmer's choice.
+
+1. In byte array chunks as usual.
+Just use the constructor which takes the chunk-size and the text blob. And process the text chunks in the ```chunkFound``` method as usual
+
+2. In text(string) chunks using the StringChunker class. 
+
+## StringChunker.java
+
+Here is a simple example which starts with a block of text and serves it up as chunks of text and merges them all together at the end.
+
+```java
+
+String blob = "Experience is wasted if history does not repeat itself...Gbemiro Jiboye";
+
+ final StringBuilder builder = new StringBuilder();
+        StringChunker chunker = new StringChunker(4, blob) {
+            @Override
+            public void chunkFound(String foundChunk, int bytesProcessed) {
+                builder.append(foundChunk);
+                System.out.println("Found: "+foundChunk+", bytesProcessed: "+bytesProcessed+" bytes");
+            }
+            
+            @Override
+            public void chunksExhausted(int bytesProcessed) {
+                System.out.println("Processed all of: "+bytesProcessed+" bytes. Rebuilt string is: "+builder.toString());
+            }
+        };
+```
 
 
 
