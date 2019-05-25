@@ -10,8 +10,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-
-
+import java.io.UnsupportedEncodingException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Loops through an array or InputStream and produces chunks of it in sequential
@@ -68,8 +69,8 @@ public abstract class DataChunker {
         this.chunkSize = chunkSize;
         chunk(blob);
     }
-    
-      /**
+
+    /**
      *
      * @param chunkSize The sizeRatio of each chunk. Each chunk generated is
      * guaranteed to have this sizeRatio, save for the final chunk, which will
@@ -88,6 +89,25 @@ public abstract class DataChunker {
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+    }
+
+    /**
+     *
+     * @param chunkSize The sizeRatio of each chunk. Each chunk generated is
+     * guaranteed to have this sizeRatio, save for the final chunk, which will
+     * have a sizeRatio equal to the remaining number of elements in the main
+     * array.
+     *
+     * You may check the {@link DataChunker#isValid() } method to be sure that
+     * no error occurred during chunking.
+     * @param blob A block of text to be broken into chunks. The chunks of text
+     * are produced as byte array chunks. If you need them to be produced as
+     * text chunks(substrings), then look at
+     */
+    public DataChunker(int chunkSize, String blob) {
+        this.chunkSize = chunkSize;
+        chunk(blob);
 
     }
 
@@ -219,6 +239,35 @@ public abstract class DataChunker {
             ex.printStackTrace();
         }
 
+    }
+
+    /**
+     *
+     * @param blob The text to be processed in bytes.
+     */
+    private void chunk(String blob) {
+        this.valid = false;
+        int len = blob.length();
+        int bytesSent = 0;
+        try {
+            for (int i = 0; i < len; i += chunkSize) {
+
+                String chunk;
+                if (i + chunkSize < len) {
+                    chunk = blob.substring(i, i + chunkSize);
+                } else {
+                    chunk = blob.substring(i);
+                }
+
+                byte[] bytes = chunk.getBytes("UTF-8");
+                chunkFound(bytes, bytesSent += bytes.length);
+
+            }
+            chunksExhausted(len);
+            this.valid = true;
+        } catch (UnsupportedEncodingException ex) {
+            Logger.getLogger(DataChunker.class.getName()).log(Level.SEVERE, null, ex);
+        }
     }
 
     /**
