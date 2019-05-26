@@ -285,5 +285,23 @@ public abstract class DataChunker {
      * @param bytesProcessed The total number of bytes processed.
      */
     public abstract void chunksExhausted(int bytesProcessed);
+    
+    public static void main(String[] args) {
+        DataChunker chunker = new DataChunker(5, "Thy beauty, O Yisrael is slain upon thy high places! how are the mighty fallen! Tell it not in Gath!") {
+            @Override
+            public void chunkFound(byte[] foundChunk, int bytesProcessed) {
+                try {
+                    System.out.println(new String(foundChunk , "UTF-8") +"; Processed "+bytesProcessed+" bytes!");
+                } catch (UnsupportedEncodingException ex) {
+                    Logger.getLogger(DataChunker.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+            
+            @Override
+            public void chunksExhausted(int bytesProcessed) {
+                System.out.println("Processed all of "+bytesProcessed+" bytes.");
+            }
+        };
+    }
 
 }
