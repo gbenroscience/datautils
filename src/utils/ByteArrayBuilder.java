@@ -1,4 +1,4 @@
-package com.itis.easybytes.utils;
+package utils;
 
 import java.util.ArrayList;
 import java.util.Collections;
