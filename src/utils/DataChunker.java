@@ -4,18 +4,21 @@
  * and open the template in the editor.
  */
 package utils;
-
+ 
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
+import java.nio.ByteBuffer;
+import java.security.SecureRandom;
+import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
+ 
 /**
- * Loops through an array or InputStream and produces chunks of it in sequential
+ * Loops through a byte array or InputStream or ByteBuffer , File or String and produces chunks of it in sequential
  * fashion. In the process, it fires chunkFound events when it detects chunks of
  * data of the specified size. This will allow the user to do some
  * pre-processing on the chunk before using it. A grand application may be with
@@ -92,6 +95,28 @@ public abstract class DataChunker {
 
     }
 
+
+    /**
+     *
+     * @param chunkSize The sizeRatio of each chunk. Each chunk generated is
+     * guaranteed to have this sizeRatio, save for the final chunk, which will
+     * have a sizeRatio equal to the remaining number of elements in the main
+     * array.
+     *
+     * You may check the {@link DataChunker#isValid() } method to be sure that
+     * no error occurred during chunking.
+     * @param blob The File whose data is to be broken into chunks.
+     */
+    public DataChunker(int chunkSize, ByteBuffer blob) {
+        this.chunkSize = chunkSize;
+
+        try {
+            chunk(blob);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
     /**
      *
      * @param chunkSize The sizeRatio of each chunk. Each chunk generated is
@@ -111,9 +136,16 @@ public abstract class DataChunker {
 
     }
 
+    static void checkBounds(int off, int len, int size) { // package-private
+        if ((off | len | (off + len) | (size - (off + len))) < 0)
+            throw new IndexOutOfBoundsException();
+    }
+
     public boolean isValid() {
         return valid;
     }
+
+
 
     private void chunk(InputStream blob) {
         this.valid = false;
@@ -122,7 +154,7 @@ public abstract class DataChunker {
 
             //bytes read at that instant from the InputStream
             int readBytes;
-            //sum of all bytes read from the InputStream 
+            //sum of all bytes read from the InputStream
             int totalBytesRead = 0;
             // int processedBytes = 0;//bytes fed to the chunkFound method.
             byte[] chunk = new byte[chunkSize];
@@ -166,17 +198,17 @@ public abstract class DataChunker {
 
                     readBuffer = remainder;//Account for unread items.
                     cursor = remainder;
-                    DataChunker chunkParent = this;
+                    final DataChunker chunkParent = this;
 
                     final int allBytesRead = totalBytesRead;
                     DataChunker chunker = new DataChunker(chunkSize, bigChunk) {
                         @Override
-                        public void chunkFound(byte[] foundChunk, int bytesProcessed) {
+                        public void chunkFound(byte[] foundChunk, long bytesProcessed) {
                             chunkParent.chunkFound(foundChunk, allBytesRead);
                         }
 
                         @Override
-                        public void chunksExhausted(int bytesProcessed) {
+                        public void chunksExhausted(long bytesProcessed) {
 
                         }
                     };
@@ -206,6 +238,16 @@ public abstract class DataChunker {
 
     }
 
+    /**
+     * Upgraded chunk method for delivering byte arrays in chunks.
+     * 1. Uses System.arraycopy to copy data.
+     * 2. Does not do byte by byte copy in Java again, instead does it using 1. above.
+     * 3. Does not create new chunking array instances except for the last chunk, if the size of the last
+     * chunk is less than the chunk size. So it creates one array for the chunks and reuses it
+     * throughout the whole copying process.
+     * Speed gains will be high.
+     * @param blob The array to copy.
+     */
     private void chunk(byte[] blob) {
         this.valid = false;
         try {
@@ -216,10 +258,26 @@ public abstract class DataChunker {
 
             int cursor = 0;
             byte[] chunk = new byte[chunkSize <= len ? chunkSize : len];
+
+            while(sentBytes < len){
+
+                long remainingBytes = len - sentBytes;
+                if(remainingBytes >= chunkSize){
+                    System.arraycopy(blob , sentBytes , chunk , 0 ,chunkSize);
+                    sentBytes += chunkSize;
+                    chunkFound(chunk, sentBytes);
+                }else{
+                    chunk = new byte[(int) remainingBytes];
+                    System.arraycopy(blob , sentBytes , chunk , 0 , (int) remainingBytes);
+                    sentBytes = len;
+                    chunkFound(chunk, sentBytes);
+                }
+            }
+            chunksExhausted(sentBytes);
+           
+            /*
             for (int i = 0; i < len; i++) {
-
                 chunk[cursor++] = blob[i];
-
                 sentBytes++;
                 if (cursor == chunk.length) {
                     reset:
@@ -227,18 +285,42 @@ public abstract class DataChunker {
                         chunkFound(chunk, sentBytes);
                         cursor = 0;
                         chunk = new byte[chunkSize <= len - sentBytes ? chunkSize : len - sentBytes];
-
                     }
                 }
-
             }
-
             chunksExhausted(sentBytes);
+            */
             this.valid = true;
         } catch (Exception ex) {
             ex.printStackTrace();
         }
 
+    }
+
+
+    private void chunk(ByteBuffer buffer){
+        this.valid = false;
+        int len = buffer.remaining();
+
+        int cursor = 0;
+        int sentBytes = 0;
+        byte[] chunk = new byte[chunkSize <= len ? chunkSize : len];
+        for(int i = 0; i < len; i++){
+
+            chunk[cursor++] = buffer.get(i);
+            sentBytes++;
+            if (cursor == chunk.length) {
+                reset:
+                {
+                    chunkFound(chunk, sentBytes);
+                    cursor = 0;
+                    chunk = new byte[chunkSize <= len - sentBytes ? chunkSize : len - sentBytes];
+                }
+            }
+        }
+        chunksExhausted(sentBytes);
+
+        this.valid = true;
     }
 
     /**
@@ -277,31 +359,45 @@ public abstract class DataChunker {
      * @param bytesProcessed The total number of bytes processed including the
      * current chunk.
      */
-    public abstract void chunkFound(byte[] foundChunk, int bytesProcessed);
+    public abstract void chunkFound(byte[] foundChunk, long bytesProcessed);
 
     /**
      * Fired when all chunks have been detected.
      *
      * @param bytesProcessed The total number of bytes processed.
      */
-    public abstract void chunksExhausted(int bytesProcessed);
-    
+    public abstract void chunksExhausted(long bytesProcessed);
+
     public static void main(String[] args) {
-        DataChunker chunker = new DataChunker(5, "Thy beauty, O Yisrael is slain upon thy high places! how are the mighty fallen! Tell it not in Gath!") {
+          byte[] seed = new byte[150];
+        Random r = new Random(System.nanoTime());
+        r.nextBytes(seed);
+        SecureRandom rnd = new SecureRandom(seed);
+        int i = 0;
+      while( i < 5){  
+        byte[] b = new byte[20000];
+        rnd.nextBytes(b);
+         
+        long start = System.nanoTime();
+        DataChunker chunker = new DataChunker(199, b) {
             @Override
-            public void chunkFound(byte[] foundChunk, int bytesProcessed) {
-                try {
-                    System.out.println(new String(foundChunk , "UTF-8") +"; Processed "+bytesProcessed+" bytes!");
-                } catch (UnsupportedEncodingException ex) {
-                    Logger.getLogger(DataChunker.class.getName()).log(Level.SEVERE, null, ex);
-                }
+            public void chunkFound(byte[] foundChunk, long bytesProcessed) {
+              //  System.out.println("...Now processed "+bytesProcessed+" bytes in "+foundChunk.length+" byte chunks"); 
             }
             
             @Override
-            public void chunksExhausted(int bytesProcessed) {
-                System.out.println("Processed all of "+bytesProcessed+" bytes.");
+            public void chunksExhausted(long bytesProcessed) {
+                  // System.out.println("All "+bytesProcessed+" bytes processed; Thanks");
             }
         };
+        double dur = (System.nanoTime() - start)/1.0E6;
+        
+        System.out.println("At i = "+(++i)+" Duration = "+dur+" ms.");
+      }
+        
+        
+        
+         
     }
 
 }
