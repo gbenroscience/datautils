@@ -1,18 +1,20 @@
 package utils;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ByteArrayBuilder implements Cloneable {
+public final class ByteArrayBuilder implements Cloneable {
 
-    private class Buffer {
+    private final Object lock = new Object();
 
-        private final List<byte[]> store = Collections.synchronizedList(new ArrayList<>());
+    private static class Buffer {
+
+        private final List<byte[]> store = new ArrayList<>();
         private final AtomicInteger size = new AtomicInteger();
 
-        private synchronized void reset() {
+        private void reset() {
             size.set(0);
             store.clear();
         }
@@ -25,15 +27,29 @@ public class ByteArrayBuilder implements Cloneable {
         buffer = new Buffer();
     }
 
-    public synchronized void sync() {
-        reconcile();
+    public ByteArrayBuilder(byte[] array) {
+        this();
+        append(array, false);
     }
 
-    public synchronized void clear() {
-        realStore = new byte[]{};
-        buffer.reset();
+    public ByteArrayBuilder(ByteBuffer buffer) {
+        this();
+        append(buffer);
     }
-    
+
+    public void sync() {
+        synchronized (lock) {
+            reconcile();
+        }
+    }
+
+    public void clear() {
+        synchronized (lock) {
+            realStore = new byte[]{};
+            buffer.reset();
+        }
+    }
+
     /**
      *
      * @param lng A long number
@@ -82,6 +98,7 @@ public class ByteArrayBuilder implements Cloneable {
         return bytes;
 
     }
+
     /**
      *
      * @return a copy of this {@link ByteArrayBuilder}. The clone is not linked
@@ -90,51 +107,77 @@ public class ByteArrayBuilder implements Cloneable {
      * original {@link ByteArrayBuilder} have no effect on the clone.
      */
     @Override
-    public synchronized ByteArrayBuilder clone() {
-        reconcile();
-        ByteArrayBuilder b = new ByteArrayBuilder();
-        b.realStore = new byte[this.realStore.length];
-        System.arraycopy(realStore, 0, b.realStore, 0, realStore.length);
-        return b;
+    public ByteArrayBuilder clone() {
+        synchronized (lock) {
+            reconcile();
+            ByteArrayBuilder b = new ByteArrayBuilder();
+            b.realStore = new byte[this.realStore.length];
+            System.arraycopy(realStore, 0, b.realStore, 0, realStore.length);
+            return b;
+        }
     }
 
     /**
-     * Merges the items stored in the buffer with the items in the real store.
+     * reconcile() is not locked,as it is a private client method of the public
+     * methods of this class
      */
     private void reconcile() {
-
-        if (buffer == null || buffer.store.isEmpty()) {
+        if (buffer.store.isEmpty()) {
             return;
         }
 
-        synchronized (buffer) {
+        int bufferSize = buffer.size.get();
+        int existingLength = (realStore != null) ? realStore.length : 0;
 
-            if (realStore == null || realStore.length == 0) {
-                realStore = new byte[buffer.size.get()];
-                buffer.size.set(0);
-                int ind = 0;
+        byte[] combined = new byte[existingLength + bufferSize];
 
-                for (byte[] elem : buffer.store) {
-                    System.arraycopy(elem, 0, realStore, ind, elem.length);
-                    ind += elem.length;
-                }
-            } else {
-                byte[] temp = new byte[realStore.length + buffer.size.get()];
-                buffer.size.set(0);
-                int ind = 0;
-                System.arraycopy(realStore, 0, temp, 0, realStore.length);
-                ind += realStore.length;
+        // Copy existing realStore if present
+        if (existingLength > 0) {
+            System.arraycopy(realStore, 0, combined, 0, existingLength);
+        }
+        // Copy buffer contents
+        int index = existingLength;
+        for (byte[] elem : buffer.store) {
+            System.arraycopy(elem, 0, combined, index, elem.length);
+            index += elem.length;
+        }
+        realStore = combined;
+        buffer.store.clear(); // Reset directly
+        buffer.size.set(0);
+    }
 
-                for (byte[] elem : buffer.store) {
-                    System.arraycopy(elem, 0, temp, ind, elem.length);
-                    ind += elem.length;
-                }
+    /**
+     * reconcile() is not locked,as it is a private client method of the public
+     * methods of this class Merges the items stored in the buffer with the
+     * items in the real store.
+     */
+    private void reconcile1() {
+        if (buffer == null || buffer.store.isEmpty()) {
+            return;
+        }
+        if (realStore == null || realStore.length == 0) {
+            realStore = new byte[buffer.size.get()];
+            buffer.size.set(0);
+            int ind = 0;
+            for (byte[] elem : buffer.store) {
+                System.arraycopy(elem, 0, realStore, ind, elem.length);
+                ind += elem.length;
+            }
+        } else {
+            byte[] temp = new byte[realStore.length + buffer.size.get()];
+            buffer.size.set(0);
+            int ind = 0;
+            System.arraycopy(realStore, 0, temp, 0, realStore.length);
+            ind += realStore.length;
 
-                this.realStore = temp;
+            for (byte[] elem : buffer.store) {
+                System.arraycopy(elem, 0, temp, ind, elem.length);
+                ind += elem.length;
             }
 
-            buffer.reset();
+            this.realStore = temp;
         }
+        buffer.reset();
     }
 
     /**
@@ -146,8 +189,7 @@ public class ByteArrayBuilder implements Cloneable {
      * @return the original object with the fresh data prepended to it.
      */
     public ByteArrayBuilder prepend(byte[] data) {
-        insert(0, data);
-        return this;
+        return insert(0, data);
     }
 
     /**
@@ -155,7 +197,7 @@ public class ByteArrayBuilder implements Cloneable {
      * @param number Converts the long value to a byte array and appends it
      * @return the original object with the long's bytes appended to it.
      */
-    public synchronized ByteArrayBuilder append(long number) {
+    public ByteArrayBuilder append(long number) {
         return append(toBytes(number), false);
     }
 
@@ -164,7 +206,7 @@ public class ByteArrayBuilder implements Cloneable {
      * @param number Converts the int value to a byte array and appends it
      * @return the original object with the int's bytes appended to it.
      */
-    public synchronized ByteArrayBuilder append(int number) {
+    public ByteArrayBuilder append(int number) {
         return append(toBytes(number), false);
     }
 
@@ -173,11 +215,11 @@ public class ByteArrayBuilder implements Cloneable {
      * @param number Converts the short value to a byte array and appends it
      * @return the original object with the short's bytes appended to it.
      */
-    public synchronized ByteArrayBuilder append(short number) {
+    public ByteArrayBuilder append(short number) {
         return append(toBytes(number), false);
     }
 
-    public synchronized ByteArrayBuilder append(byte data) {
+    public ByteArrayBuilder append(byte data) {
         return append(new byte[]{data}, false);
     }
 
@@ -188,8 +230,46 @@ public class ByteArrayBuilder implements Cloneable {
      * @param data A byte array to append to the {@link ByteArrayBuilder}
      * @return the instance of this builder object to facilitate chaining calls
      */
-    public synchronized ByteArrayBuilder append(byte[] data) {
+    public ByteArrayBuilder append(byte[] data) {
         return append(data.clone(), false);
+    }
+
+    /**
+     * This method is provided in line with Java conventions of copying by index
+     * up to a given number of items, since we use the unpopular convention for
+     * the relevant counterpart append() method i.e.({@linkplain ByteArrayBuilder#append(byte[], int, int, boolean)
+     * }) where we copy from an offset(index) up to a certain index
+     *
+     * @param data The data to append from
+     * @param offset The starting index(0-based) to start copying from.
+     * @param numOfItems The number of items to copy from data into this
+     * {@linkplain ByteArrayBuilder}
+     * @param last If true, reconcile or merge on copy
+     * @return this {@linkplain ByteArrayBuilder}
+     */
+    public ByteArrayBuilder appendItems(byte[] data, int offset, int numOfItems, boolean last) {
+        if (offset < 0 || numOfItems < 0 || offset + numOfItems > data.length) {
+            throw new IndexOutOfBoundsException("Invalid offset or length");
+        }
+        byte[] bits = new byte[numOfItems];
+        System.arraycopy(data, offset, bits, 0, numOfItems);
+        return append(bits, last);
+    }
+
+    /**
+     * This method is provided in line with Java conventions of copying by index
+     * up to a given number of items, since we use the unpopular convention for
+     * the relevant counterpart append() method i.e.({@linkplain ByteArrayBuilder#append(byte[], int, int, boolean)
+     * }) where we copy from an offset(index) up to a certain index
+     *
+     * @param data The data to append from
+     * @param offset The starting index(0-based) to start copying from.
+     * @param numOfItems The number of items to copy from data into this
+     * {@linkplain ByteArrayBuilder}
+     * @return this {@linkplain ByteArrayBuilder}
+     */
+    public ByteArrayBuilder appendItems(byte[] data, int offset, int numOfItems) {
+        return appendItems(data, offset, numOfItems, false);
     }
 
     /**
@@ -203,7 +283,23 @@ public class ByteArrayBuilder implements Cloneable {
      * @param toIndex The final index to copy
      * @return the instance of this builder object to facilitate chaining calls
      */
-    public synchronized ByteArrayBuilder append(byte[] data, int fromIndex, int toIndex) {
+    public ByteArrayBuilder append(byte[] data, int fromIndex, int toIndex) {
+        return append(data, fromIndex, toIndex, false);
+    }
+
+    /**
+     * Appends the portion of this byte array starting from
+     * <code>fromIndex</code> up to and including <code>toIndex</code> to this
+     * builder at very high speed. When done with calls to this method, always
+     * call {@link ByteArrayBuilder#sync()} to
+     *
+     * @param data A byte array to append to the {@link ByteArrayBuilder}
+     * @param fromIndex index to start copying from
+     * @param toIndex The final index to copy
+     * @param last
+     * @return the instance of this builder object to facilitate chaining calls
+     */
+    public ByteArrayBuilder append(byte[] data, int fromIndex, int toIndex, boolean last) {
         if (fromIndex < 0) {
             throw new IllegalArgumentException("fromIndex must be >= 0");
         }
@@ -219,10 +315,9 @@ public class ByteArrayBuilder implements Cloneable {
         if (toIndex >= data.length) {
             throw new IllegalArgumentException("toIndex must be < " + data.length);
         }
-
         byte[] bits = new byte[toIndex - fromIndex + 1];
         System.arraycopy(data, fromIndex, bits, 0, bits.length);
-        return append(bits, false);
+        return append(bits, last);
     }
 
     /**
@@ -232,16 +327,72 @@ public class ByteArrayBuilder implements Cloneable {
      * the builder structure.
      * @return the instance of this builder object to facilitate chaining calls
      */
-    public synchronized ByteArrayBuilder append(byte[] data, boolean last) {
+    public ByteArrayBuilder append(byte[] data, boolean last) {
+        synchronized (lock) {
+            buffer.store.add(data);
+            buffer.size.addAndGet(data.length);
+            if (last) {
+                reconcile();
+            }
+            return this;
+        }
+    }
 
-        buffer.store.add(data);
-        buffer.size.addAndGet(data.length);
-
-        if (last) {
-            reconcile();
+    public ByteArrayBuilder append(ByteBuffer buffer) {
+        if (buffer == null) {
+            throw new NullPointerException("ByteBuffer cannot be null");
         }
 
-        return this;
+        int remaining = buffer.remaining();
+        if (remaining == 0) {
+            return this;
+        }
+
+        // Try zero-copy for heap-backed buffers
+        if (buffer.hasArray() && !buffer.isReadOnly()) {
+            byte[] raw = buffer.array();
+            int offset = buffer.arrayOffset() + buffer.position();
+            appendItems(raw, offset, remaining, false);
+            buffer.position(buffer.limit()); // drain the buffer
+            return this;
+        }
+
+        // Fallback: copy into temporary array
+        byte[] chunk = new byte[remaining];
+        buffer.get(chunk); // drains the buffer
+        return append(chunk, false);
+    }
+
+    /**
+     * Inserts a byte array at the specified index in the
+     * {@link ByteArrayBuilder}.
+     *
+     * @param index The position in the byte array to insert the new data.
+     * @param data The byte array to insert.
+     * @return This {@link ByteArrayBuilder} instance.
+     * @throws ArrayIndexOutOfBoundsException if the index is invalid.
+     */
+    public ByteArrayBuilder insert(int index, byte[] data) {
+        synchronized (lock) {
+            if (index < 0 || index > realStore.length) {
+                throw new ArrayIndexOutOfBoundsException("Input Index: " + index + " > " + realStore.length);
+            }
+
+            if ((index == 0 && realStore.length == 0) || index == realStore.length) {
+                return append(data.clone());
+            }
+            reconcile(); // Ensure buffer is merged before insertion
+
+            byte[] temp = new byte[realStore.length + data.length];
+
+            // Copy segments into temp
+            System.arraycopy(realStore, 0, temp, 0, index);
+            System.arraycopy(data, 0, temp, index, data.length);
+            System.arraycopy(realStore, index, temp, index + data.length, realStore.length - index);
+
+            realStore = temp;
+            return this;
+        }
     }
 
     /**
@@ -261,42 +412,29 @@ public class ByteArrayBuilder implements Cloneable {
      * {@link ByteArrayBuilder}
      * @return
      */
-    public synchronized ByteArrayBuilder insert(int index, byte[] data) {
-
-        if (index < 0) {
-            throw new ArrayIndexOutOfBoundsException("Input Index: " + index + " > " + realStore.length);
-        }
-
-        if (index == 0 && realStore.length == 0 || index == realStore.length) {
-            append(data.clone());
-            return this;
-        }
-
-        if (index > realStore.length) {
-            throw new ArrayIndexOutOfBoundsException("Input Index: " + index + " > " + realStore.length);
-        }
-
-        reconcile();
-
-        byte[] temp = new byte[realStore.length + data.length];
-
-        synchronized (realStore) {
-
+    public ByteArrayBuilder insert1(int index, byte[] data) {
+        synchronized (lock) {
+            reconcile();
+            byte[] temp = new byte[realStore.length + data.length];
+            if (index < 0) {
+                throw new ArrayIndexOutOfBoundsException("Input Index: " + index + " > " + realStore.length);
+            }
+            if (index == 0 && realStore.length == 0 || index == realStore.length) {
+                append(data.clone());
+                return this;
+            }
+            if (index > realStore.length) {
+                throw new ArrayIndexOutOfBoundsException("Input Index: " + index + " > " + realStore.length);
+            }
             int ind = 0;
             System.arraycopy(realStore, 0, temp, ind, index);
             ind += index;
-
             System.arraycopy(data, 0, temp, ind, data.length);
             ind += data.length;
-
             System.arraycopy(realStore, index, temp, ind, realStore.length - index);
-
             this.realStore = temp;
-
             return this;
-
         }
-
     }
 
     /**
@@ -305,19 +443,19 @@ public class ByteArrayBuilder implements Cloneable {
      * @return the byte at that index
      */
     public byte get(int index) {
-        reconcile();
-
-        if (realStore.length == 0) {
-            throw new ArrayIndexOutOfBoundsException("Cannot access index (" + index + ") in empty builder");
+        synchronized (lock) {
+            reconcile();
+            if (realStore.length == 0) {
+                throw new ArrayIndexOutOfBoundsException("Cannot access index (" + index + ") in empty builder");
+            }
+            if (index < 0) {
+                throw new ArrayIndexOutOfBoundsException("Input Index cannot be negative.");
+            }
+            if (index >= realStore.length) {
+                throw new ArrayIndexOutOfBoundsException("Input Index (" + index + ") >= Builder Size(" + realStore.length + ")");
+            }
+            return realStore[index];
         }
-        if (index < 0) {
-            throw new ArrayIndexOutOfBoundsException("Input Index cannot be negative.");
-        }
-        if (index >= realStore.length) {
-            throw new ArrayIndexOutOfBoundsException("Input Index (" + index + ") >= Builder Size(" + realStore.length + ")");
-        }
-
-        return realStore[index];
 
     }
 
@@ -326,20 +464,22 @@ public class ByteArrayBuilder implements Cloneable {
      * @param index The index whose byte we wish to update
      * @param number The data to set at the specified index.
      */
-    public synchronized void set(int index, byte number) {
-        reconcile();
+    public void set(int index, byte number) {
+        synchronized (lock) {
+            reconcile();
 
-        if (realStore.length == 0) {
-            throw new ArrayIndexOutOfBoundsException("Cannot access index (" + index + ") in empty builder. Append some data first!");
-        }
-        if (index < 0) {
-            throw new ArrayIndexOutOfBoundsException("Input Index cannot be negative.");
-        }
-        if (index >= realStore.length) {
-            throw new ArrayIndexOutOfBoundsException("Input Index (" + index + ") >= Builder Size(" + realStore.length + ")");
-        }
+            if (realStore.length == 0) {
+                throw new ArrayIndexOutOfBoundsException("Cannot access index (" + index + ") in empty builder. Append some data first!");
+            }
+            if (index < 0) {
+                throw new ArrayIndexOutOfBoundsException("Input Index cannot be negative.");
+            }
+            if (index >= realStore.length) {
+                throw new ArrayIndexOutOfBoundsException("Input Index (" + index + ") >= Builder Size(" + realStore.length + ")");
+            }
 
-        realStore[index] = number;
+            realStore[index] = number;
+        }
 
     }
 
@@ -351,24 +491,25 @@ public class ByteArrayBuilder implements Cloneable {
      * @param data The data to set at the specified index.
      * @return the byte at that index
      */
-    public synchronized ByteArrayBuilder set(int startIndex, byte[] data) {
-        reconcile();
+    public ByteArrayBuilder set(int startIndex, byte[] data) {
+        synchronized (lock) {
+            reconcile();
 
-        if (realStore.length == 0) {
-            throw new ArrayIndexOutOfBoundsException("Cannot access index (" + startIndex + ") in empty builder. Append some data first!");
-        }
-        if (startIndex < 0) {
-            throw new ArrayIndexOutOfBoundsException("Input Index cannot be negative.");
-        }
-        if (startIndex >= realStore.length) {
-            throw new ArrayIndexOutOfBoundsException("Input Index (" + startIndex + ") >= Builder Size(" + realStore.length + ")");
-        }
-        if (startIndex + data.length > realStore.length) {
-            throw new ArrayIndexOutOfBoundsException("Input Index (" + startIndex + ") + Input Length >= Builder Size(" + realStore.length + ") Space not enough!");
-        }
+            if (realStore.length == 0) {
+                throw new ArrayIndexOutOfBoundsException("Cannot access index (" + startIndex + ") in empty builder. Append some data first!");
+            }
+            if (startIndex < 0) {
+                throw new ArrayIndexOutOfBoundsException("Input Index cannot be negative.");
+            }
+            if (startIndex >= realStore.length) {
+                throw new ArrayIndexOutOfBoundsException("Input Index (" + startIndex + ") >= Builder Size(" + realStore.length + ")");
+            }
+            if (startIndex + data.length > realStore.length) {
+                throw new ArrayIndexOutOfBoundsException("Input Index (" + startIndex + ") + Input Length >= Builder Size(" + realStore.length + ") Space not enough!");
+            }
 
-        System.arraycopy(data, 0, realStore, startIndex, data.length);
-
+            System.arraycopy(data, 0, realStore, startIndex, data.length);
+        }
         //[4,9,1,2,6,3,7,0,8,5]
         //              [2,1,3,9]
         //[0,1,2,3,4,5,6,7,8,9]
@@ -377,8 +518,15 @@ public class ByteArrayBuilder implements Cloneable {
     }
 
     public int length() {
-        reconcile();
+        return realStore.length + buffer.size.get();
+    }
+
+    public int commitedLength() {
         return realStore.length;
+    }
+
+    public int nonCommitedLength() {
+        return buffer.size.get();
     }
 
     /**
@@ -386,30 +534,33 @@ public class ByteArrayBuilder implements Cloneable {
      * @param startIndex The index from which we wish to copy some data in
      * {@link ByteArrayBuilder##realStore}
      * @param numberOfItems The number of items to copy
+     * @return
      */
-    public synchronized byte[] get(int startIndex, int numberOfItems) {
-        reconcile();
+    public byte[] get(int startIndex, int numberOfItems) {
+        synchronized (lock) {
+            reconcile();
 
-        if (realStore.length == 0) {
-            throw new ArrayIndexOutOfBoundsException("Cannot access index (" + startIndex + ") in empty builder. Append some data first!");
-        }
-        if (startIndex < 0) {
-            throw new ArrayIndexOutOfBoundsException("Input Index cannot be negative.");
-        }
-        if (startIndex >= realStore.length) {
-            throw new ArrayIndexOutOfBoundsException("Input Index (" + startIndex + ") >= Builder Size(" + realStore.length + ")");
-        }
-        if (startIndex + numberOfItems > realStore.length) {
-            throw new ArrayIndexOutOfBoundsException("Input Index (" + startIndex + ") + Input Length >= Builder Size(" + realStore.length + ") Space not enough!");
-        }
+            if (realStore.length == 0) {
+                throw new ArrayIndexOutOfBoundsException("Cannot access index (" + startIndex + ") in empty builder. Append some data first!");
+            }
+            if (startIndex < 0) {
+                throw new ArrayIndexOutOfBoundsException("Input Index cannot be negative.");
+            }
+            if (startIndex >= realStore.length) {
+                throw new ArrayIndexOutOfBoundsException("Input Index (" + startIndex + ") >= Builder Size(" + realStore.length + ")");
+            }
+            if (startIndex + numberOfItems > realStore.length) {
+                throw new ArrayIndexOutOfBoundsException("Input Index (" + startIndex + ") + Input Length >= Builder Size(" + realStore.length + ") Space not enough!");
+            }
 
-        byte[] data = new byte[numberOfItems];
-        System.arraycopy(realStore, startIndex, data, 0, numberOfItems);
-        //[4,9,1,2,6,3,7,0,8,5]
-        //              [2,1,3,9]
-        //[0,1,2,3,4,5,6,7,8,9]
+            byte[] data = new byte[numberOfItems];
+            System.arraycopy(realStore, startIndex, data, 0, numberOfItems);
+            //[4,9,1,2,6,3,7,0,8,5]
+            //              [2,1,3,9]
+            //[0,1,2,3,4,5,6,7,8,9]
 
-        return data;
+            return data;
+        }
 
     }
 
@@ -419,58 +570,63 @@ public class ByteArrayBuilder implements Cloneable {
      * @param numberOfItems The number of items to remove
      * @return the original {@link ByteArrayBuilder}, now modified
      */
-    public synchronized ByteArrayBuilder remove(int start, int numberOfItems) {
+    public ByteArrayBuilder remove(int start, int numberOfItems) {
 
-        reconcile();
-        int end = start + numberOfItems - 1;
+        synchronized (lock) {
+            reconcile();
+            int end = start + numberOfItems - 1;
 
-        if (realStore.length == 0) {
-            throw new ArrayIndexOutOfBoundsException("Cannot access index (" + start + ") in empty builder. Append some data first!");
+            if (realStore.length == 0) {
+                throw new ArrayIndexOutOfBoundsException("Cannot access index (" + start + ") in empty builder. Append some data first!");
+            }
+            if (start < 0) {
+                throw new ArrayIndexOutOfBoundsException("Input Index cannot be negative.");
+            }
+            if (start >= realStore.length) {
+                throw new ArrayIndexOutOfBoundsException("Input Index (" + start + ") >= Builder Size(" + realStore.length + ")");
+            }
+            if (start >= end) {
+                throw new ArrayIndexOutOfBoundsException("Start Index (" + start + ") >= End Index(" + end + ") is just plain wrong");
+            }
+
+            if (end > realStore.length) {
+                throw new ArrayIndexOutOfBoundsException("End Index (" + end + ") > Builder Size(" + realStore.length + ") is an out-of-bounds indexing error!");
+            }
+
+            byte[] data = new byte[realStore.length - numberOfItems];
+
+            int ind = 0;
+
+            //[4,5,2,3,1,8,6,9]
+            //[0,1,2,3,4,5,6,7] from 2 , 3 elems...end = start+num-1 = 2 + 3 - 1 = 4
+            //[4,5,8,6]
+            System.arraycopy(realStore, 0, data, ind, start);
+
+            ind += start;
+
+            System.arraycopy(realStore, end + 1, data, ind, realStore.length - end - 1);
+
+            this.realStore = data;
+            return this;
         }
-        if (start < 0) {
-            throw new ArrayIndexOutOfBoundsException("Input Index cannot be negative.");
-        }
-        if (start >= realStore.length) {
-            throw new ArrayIndexOutOfBoundsException("Input Index (" + start + ") >= Builder Size(" + realStore.length + ")");
-        }
-        if (start >= end) {
-            throw new ArrayIndexOutOfBoundsException("Start Index (" + start + ") >= End Index(" + end + ") is just plain wrong");
-        }
-
-        if (end > realStore.length) {
-            throw new ArrayIndexOutOfBoundsException("End Index (" + end + ") > Builder Size(" + realStore.length + ") is an out-of-bounds indexing error!");
-        }
-
-        byte[] data = new byte[realStore.length - numberOfItems];
-
-        int ind = 0;
-
-        //[4,5,2,3,1,8,6,9]
-        //[0,1,2,3,4,5,6,7] from 2 , 3 elems...end = start+num-1 = 2 + 3 - 1 = 4
-        //[4,5,8,6]
-        System.arraycopy(realStore, 0, data, ind, start);
-
-        ind += start;
-
-        System.arraycopy(realStore, end + 1, data, ind, realStore.length - end - 1);
-
-        this.realStore = data;
-        return this;
     }
 
     /**
      *
      * @return the builder data as a byte array
      */
-    public synchronized byte[] getBytes() {
-        reconcile();
-        return realStore;
+    public byte[] getBytes() {
+        synchronized (lock) {
+            reconcile();
+            return realStore;
+        }
+
     }
 
     @Override
     public String toString() {
         reconcile();
-        synchronized (realStore) {
+        synchronized (lock) {
 
             StringBuilder b = new StringBuilder("[");
             for (byte e : realStore) {
@@ -501,3 +657,4 @@ public class ByteArrayBuilder implements Cloneable {
     }
 
 }
+
