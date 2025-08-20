@@ -9,7 +9,7 @@ public final class ByteArrayBuilder implements Cloneable {
 
     private final Object lock = new Object();
 
-    private static class Buffer {
+    private static final class Buffer {
 
         private final List<byte[]> store = new ArrayList<>();
         private final AtomicInteger size = new AtomicInteger();
