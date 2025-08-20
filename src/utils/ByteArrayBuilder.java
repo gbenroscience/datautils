@@ -145,40 +145,7 @@ public final class ByteArrayBuilder implements Cloneable {
         buffer.store.clear(); // Reset directly
         buffer.size.set(0);
     }
-
-    /**
-     * reconcile() is not locked,as it is a private client method of the public
-     * methods of this class Merges the items stored in the buffer with the
-     * items in the real store.
-     */
-    private void reconcile1() {
-        if (buffer == null || buffer.store.isEmpty()) {
-            return;
-        }
-        if (realStore == null || realStore.length == 0) {
-            realStore = new byte[buffer.size.get()];
-            buffer.size.set(0);
-            int ind = 0;
-            for (byte[] elem : buffer.store) {
-                System.arraycopy(elem, 0, realStore, ind, elem.length);
-                ind += elem.length;
-            }
-        } else {
-            byte[] temp = new byte[realStore.length + buffer.size.get()];
-            buffer.size.set(0);
-            int ind = 0;
-            System.arraycopy(realStore, 0, temp, 0, realStore.length);
-            ind += realStore.length;
-
-            for (byte[] elem : buffer.store) {
-                System.arraycopy(elem, 0, temp, ind, elem.length);
-                ind += elem.length;
-            }
-
-            this.realStore = temp;
-        }
-        buffer.reset();
-    }
+ 
 
     /**
      * Always slower than {@link ByteArrayBuilder#append(byte[])}. Use in a loop
@@ -394,48 +361,7 @@ public final class ByteArrayBuilder implements Cloneable {
             return this;
         }
     }
-
-    /**
-     * Insert may or may not be as fast as an append depending on the index of
-     * insertion Example //index of insertion = 2; //[3,1,6,5,7,8,4]//original
-     * //[0,1,2,3,4,5,6]
-     * <p>
-     * //[9,2]-->data
-     * <p>
-     * //[3,1,9,2,6,5,7,8,4]
-     *
-     * Inserts a byte array at the given index of the {@link ByteArrayBuilder}
-     *
-     * @param index The index in the byte array at which to insert the byte
-     * array supplied
-     * @param data A byte array to insert at the given index in the
-     * {@link ByteArrayBuilder}
-     * @return
-     */
-    public ByteArrayBuilder insert1(int index, byte[] data) {
-        synchronized (lock) {
-            reconcile();
-            byte[] temp = new byte[realStore.length + data.length];
-            if (index < 0) {
-                throw new ArrayIndexOutOfBoundsException("Input Index: " + index + " > " + realStore.length);
-            }
-            if (index == 0 && realStore.length == 0 || index == realStore.length) {
-                append(data.clone());
-                return this;
-            }
-            if (index > realStore.length) {
-                throw new ArrayIndexOutOfBoundsException("Input Index: " + index + " > " + realStore.length);
-            }
-            int ind = 0;
-            System.arraycopy(realStore, 0, temp, ind, index);
-            ind += index;
-            System.arraycopy(data, 0, temp, ind, data.length);
-            ind += data.length;
-            System.arraycopy(realStore, index, temp, ind, realStore.length - index);
-            this.realStore = temp;
-            return this;
-        }
-    }
+ 
 
     /**
      *
