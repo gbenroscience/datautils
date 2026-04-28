@@ -37,7 +37,7 @@ public class ByteArrayBuilderWars {
             byte[] data = new byte[dataArraySize];
             secRnd1.nextBytes(data);
             buffer.put(data);
-        }
+        } 
         long appendTime = System.nanoTime() - start;
 
         System.out.printf("ByteBuffer#put() time for " + numberOfArrays + " byte arrays of size " + dataArraySize + "(" + (dataArraySize * numberOfArrays / 1000000) + "MB): %.2f ms%n", appendTime / 1_000_000.0);

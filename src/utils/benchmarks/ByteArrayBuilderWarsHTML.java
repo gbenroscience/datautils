@@ -2,7 +2,7 @@ package utils.benchmarks;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.security.SecureRandom; 
+import java.security.SecureRandom;
 import java.util.Random;
 import utils.ByteArrayBuilder;
 import utils.Utils;
@@ -22,25 +22,12 @@ public class ByteArrayBuilderWarsHTML {
     }
 
     public static void main(String[] args) throws IOException {
-        for(int i=0;i<3;i++){
-            collate(10000, (int) Math.pow(10, i+2));
+        for (int i = 0; i < 3; i++) {
+            collate(10000, (int) Math.pow(10, i + 2));
         }
-    } 
-    
-    
-    
-    
-    
-    
+    }
 
     private static void collate(int dataArraySize, int numOfArrays) {
-  
-
-        double avg4Builder = 0;
-        double avg4Buffer = 0;
-
-        double avg4Builder1 = 0;
-        double avg4Buffer1 = 0;
 
         int nAverages = 5;
         int n = 10;
@@ -64,6 +51,11 @@ public class ByteArrayBuilderWarsHTML {
 
         int j = 0;
         while (j++ < nAverages) {
+            double avg4Builder = 0;
+            double avg4Buffer = 0;
+
+            double avg4Builder1 = 0;
+            double avg4Buffer1 = 0;
             for (int i = 0; i < n; i++) {
                 Result<ByteArrayBuilder, Double> builder = ByteArrayBuilderWarsHTML.benchmarkAppendForByteArrayBuilder(dataArraySize, numOfArrays);
                 Result<ByteBuffer, Double> buffer = ByteArrayBuilderWarsHTML.benchmarkAppendForByteBuffer(dataArraySize, numOfArrays);
@@ -85,9 +77,9 @@ public class ByteArrayBuilderWarsHTML {
             row.append("</tr>\n");
 
             StringBuilder row1 = new StringBuilder("<tr>");
-            
+
             row1.append("<td>").append(dataArraySize).append("</td>").append("<td>").append(numOfArrays).append("</td>");
-            row1.append("<td>").append(Utils.round(avg4Builder1/n, 3)).append("</td>").append("<td>").append(Utils.round(avg4Buffer1/n, 3)).append("</td>");
+            row1.append("<td>").append(Utils.round(avg4Builder1 / n, 3)).append("</td>").append("<td>").append(Utils.round(avg4Buffer1 / n, 3)).append("</td>");
             row1.append("</tr>\n");
 
             table1.append(row);
@@ -142,7 +134,6 @@ public class ByteArrayBuilderWarsHTML {
         long appendTime = System.nanoTime() - start;
 //        System.out.printf("ByteArrayBuilder#append() time for " + numberOfArrays + " byte arrays of size " + dataArraySize + "(" + (dataArraySize * numberOfArrays / 1000000) + "MB): %.2f ms%n", appendTime / 1_000_000.0);
 
-        
         return new Result<>(builder1, appendTime / 1_000_000.0);
     }
 
@@ -150,9 +141,9 @@ public class ByteArrayBuilderWarsHTML {
         long start = System.nanoTime();
         byte[] builder1Bytes = builder.getBytes();
         long appendTime = System.nanoTime() - start;
-       // System.out.printf("ByteArrayBuilder#getBytes() time to read (" + (builder.length() / 1000000) + "MB) byte array: %.2f ms%n", appendTime / 1_000_000.0);
+        // System.out.printf("ByteArrayBuilder#getBytes() time to read (" + (builder.length() / 1000000) + "MB) byte array: %.2f ms%n", appendTime / 1_000_000.0);
 
-         return appendTime / 1_000_000.0;
+        return appendTime / 1_000_000.0;
     }
 
     private static double benchmarkReadBytes(ByteBuffer buffer) {
@@ -163,7 +154,7 @@ public class ByteArrayBuilderWarsHTML {
         buffer.get(completePayload);
         long appendTime = System.nanoTime() - start;
         //System.out.printf("ByteBuffer#-read-bytes time to read (" + (completePayload.length / 1000000) + "MB) byte array: %.2f ms%n", appendTime / 1_000_000.0);
- 
+
         return appendTime / 1_000_000.0;
     }
 
